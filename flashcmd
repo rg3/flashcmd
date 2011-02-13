@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+# Author: Ricardo Garcia
+# License: Public domain code
+#
+# Designed to work on Linux. This script parses the output of lsof and looks
+# for Flash files in /tmp. The files may have been deleted already. It takes
+# note of the PID and the file descriptor number, and lets you run commands
+# using /proc/PID/fd/FD as their arguments without effort.
+#
+# Example:
+#
+#	$ flashcmd
+#	
+#	(1) /tmp/FlashXXRzNy1W
+#	
+#	You choose number: 1
+#	
+#	Command to run. @@ will be replaced by the file name:
+#	> cp @@ ~/video.flv
+#
+# ... and the video is copied to your home directory.
+#
+import os
+import re
+import subprocess
+import sys
+
+regexp = re.compile(r'^\S+\s+(\d+)\s+\S+\s+(\d+)\S*\s+\S+\s+\S+\s+\S+\s+\S+\s+(/tmp/Flash.*)$')
+files = []
+
+pipe = subprocess.Popen(['lsof'], stdout=subprocess.PIPE).stdout
+for line in pipe:
+	mobj = regexp.match(line)
+	if mobj is None:
+		continue
+	files.append((mobj.group(3), '/proc/%s/fd/%s' % (mobj.group(1), mobj.group(2))))
+pipe.close()
+
+print
+for i in xrange(len(files)):
+	print '(%s) %s' % (i + 1, files[i][0])
+try:
+	choice = raw_input('\nYou choose number: ')
+	fname = files[long(choice) - 1][1] # from /proc
+	cmd = raw_input('\nCommand to run. @@ will be replaced by the file name:\n> ')
+	handle = subprocess.Popen(cmd.replace('@@', fname), shell=True)
+	os.waitpid(handle.pid, 0)
+except KeyboardInterrupt:
+	sys.exit('\nAborted')
+except IndexError, ValueError:
+	sys.exit('Error: invalid choice')
